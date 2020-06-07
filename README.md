@@ -11,5 +11,4 @@ vs 2017버전 디버그 모드 빌드.
 
 c++로 사용할려면 memput,.h를 include하고 flux.lib을 링크하십시요.
 
-챗봇 실행은 data.py에 DatasetManager 생성함수에서 패스를 위치된 chatbot_data에 고정하십시요.
 
