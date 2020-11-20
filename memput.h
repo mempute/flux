@@ -25,14 +25,27 @@ namespace memput {
 		typedef unsigned long long unitt;
 #endif
 		class Flux;
+		typedef struct WeightList_ {
+			Flux *weightFx;
+			struct WeightList_ *ptrLeft, *ptrRight;
+		} WeightList;
+		typedef struct NameScope_ {
+			intt idNameFx;
+			bool reuseScope;
+			bytet *nsName;
+			WeightList *nameWeights, *anonymWeights;
+			struct NameScope_ *ptrParent, *ptrChild, *ptrLeft, *ptrRight, *ptrLeft2, *ptrRight2;
+		} NameScope;//그래프 빌그 과정에서 생성
 
 		class Tracer {
 		public:
 			bytet characterName[24];
 			intt characterType, tcr_reserve;
+			intt dbgStep;
 			virtual ~Tracer() {}
-			virtual void namescope(bytet *nsm) {}
-			virtual void endscope(void) {}
+			virtual NameScope *namescope(const bytet *nsm, bool reuse = 0) = 0;
+			virtual NameScope *namescope(intt i, bool reuse = 0) = 0;
+			virtual void endscope(void) = 0;
 			virtual void init_train(void) = 0;
 			virtual void run(Flux *target) = 0;
 			virtual void run(vector<Flux *> target) = 0;
@@ -49,7 +62,12 @@ namespace memput {
 			virtual intt loadWeight(void) = 0;
 			virtual void truncWeight(void) = 0;
 			virtual void printWeight(void) = 0;
+			virtual void setgpudev(intt gid) = 0;
 			virtual void traceopt(intt i, doublet v) = 0;
+			virtual void directx(bool on) = 0;
+			virtual void setbygate(Flux *gate, intt nout, Flux *go, Flux *end, intt embedim = -1, intt latent_sz = -1, intt indiscret = -1) = 0;
+			virtual NameScope *findnsc(bytet *nsm, sytet root) = 0;
+			virtual vector<Flux *> *trainvar(NameScope *nsc) = 0;
 			void characterSet(bytet *char_name, intt char_type)
 			{
 				strcpy(characterName, char_name);
@@ -62,16 +80,16 @@ namespace memput {
 #define GEN_T_TACT	1
 #define GEN_T_CAP	2
 
-		class Generic {
+		class Typer {
 		public:
 			void *operator new(size_t size, Tracer *tcr);
 		};
 
-		class Contact : public Generic {
+		class Contact : public Typer {
 		public:
 			sytet Tgener = GEN_T_TACT;
 			Contact *ptrLeft, *ptrRight;
-			Generic *vcontact;
+			Typer *vcontact;
 		};
 
 		class Univ {
@@ -108,15 +126,18 @@ namespace memput {
 #define ACTF_TANH	0
 #define ACTF_RELU	2
 #define ACTF_SIGM	4
+#define ACTF_LRELU	6
 #define ACTF2_PRELU	100
+
+#define DEFA_LRELU	0.01
 		typedef intt(*vinitfp)(Flux *);
 
-		class Flux : public Generic {
+		class Flux : public Typer {
 		public:
 			sytet Tgener = GEN_T_FLUX;
 			ubytet qType, fxType;
 			intt nRefer, ibRefer, nbRefer;
-			Generic *bwAp, *bwLink, *directLink;
+			Typer *bwAp, *bwLink, *directLink;
 			Contact *fwAp;
 			void *quantum;
 			intt fdim, fxSize;
@@ -129,6 +150,8 @@ namespace memput {
 			bool termifx;
 			bool meanAfter;
 			bool trainherit;
+			bool bwbreak;
+			bool partitionfx;
 			vinitfp vinitter;
 			void *cursorP;
 			Flux *ptrLeft, *ptrRight;//lstTarget사용
@@ -145,12 +168,14 @@ namespace memput {
 			void fdims(initializer_list<intt> axid);
 			bool checkInBwfx(bool lock);
 			bool checkInBwfx2(void);
-			void projected(Generic *ap);
-			void referenced(Generic *ap);
-			void exec(void *tcxt);
+			void projected(Typer *ap);
+			void referenced(Typer *ap);
+			void exec(void *tcxt = 0);
 			void backward(void);
 			void backend_nstep(Flux *fxp, Flux *fxs, Flux *fxo, void *ap);
 			void backend_ps(Flux *fxp, Flux *fxs, Flux *fxo, void *ap);
+			void reentrance(bool on);
+			void switchTrace(Tracer *tcr, bool on);
 			Flux *arithmetic(Flux *fxs, ubytet qtype, void *sval, sytet arith_op);
 			Flux *mul(Flux *fxs, longt sval);
 			Flux *plus(Flux *fxs, longt sval);
@@ -175,23 +200,28 @@ namespace memput {
 			vector<Flux *> *unstack(intt axis);
 			void resizing2(intt n);
 			void resizing2(Flux *src);
+			void resizing3(Flux *src);
 			void sizeCheck(intt ndim, intt axid[]);
 			void resizing(Flux *src);
 			Flux *reshape(vector<intt> axid);
 			Flux *bypass(const bytet *msg = nullptr);
+			Flux *partition(Tracer *gen_trc = nullptr);
 			Flux *adjust(Flux *in);
+			Flux *duplicate(Tracer *gen_trc);
 			Flux *expand_dims(intt axis);
 			Flux *squeeze(intt axis = -1);
 			Flux *transpose(vector<intt> axid);
 			Flux *softmax(void);
 			Flux *squaredDifference(Flux *fxs);
 			Flux *softmaxCrossEntropy(Flux *fxt);
-			Flux *sum(void);
-			Flux *mean(void);
-			Flux *meanSquareError(Flux *fxt);
-			Flux *actf(intt actf_op);
+			Flux *sum(bool batch_sum = 0);
+			Flux *mean(bool batch_sum = 0);
+			//Flux *rsum(vector<intt> axid, bool mean, bool keep_dims = 0);
+			Flux *meanSquareError(Flux *fxt, bool mean = 1);
+			Flux *actf(intt actf_op, floatt alpha = DEFA_LRELU);
 			Flux *tanh(void);
 			Flux *relu(void);
+			Flux *lrelu(floatt alpha = DEFA_LRELU);
 			Flux *sigmoid(void);
 			Flux *prelu(floatt iv);
 			Flux *sqrt(void);
@@ -205,22 +235,28 @@ namespace memput {
 			Flux *clipValue(doublet low, doublet high);
 			intt copyt(void *psrc, ubytet tsrc, intt bsz);
 			void feedt(void *psrc, ubytet tsrc, intt sz);
-			intt copyf(void *pdat, intt bsz);
+			intt copyf(void *pdat, intt bsz, intt begin = 0);
 			intt copyf(Flux *src);
 			void feedf(void *pdat, intt sz);
 			void feedf(Flux *src);
 			Flux *feedf(ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr);
 			void dstrw(const bytet dstr[]);
+			void resetData(sytet gpu);
 			void dumpToGrad(void);
 			void resetGrad(void);
 			void shape(void);
-			void *begin_p(void);
-			void *begin_wp(void);
+			void *begin_p(intt off = 0);
+			void *begin_wp(intt off = 0);
 			void *end_p(void);
+			void *read_p(vector<intt> axid, intt *rsz = nullptr);
+			void write_p(vector<intt> axid, void *dat, intt wsz = 0);
+			void howrite(Flux *src, intt iseq = 0);
 			doublet at_d(intt i);
 			doublet at_d2(intt i);
-			void printo(bool nwl = true, sytet leaf_one = 0);
-			void printg(bool nwl = true, sytet leaf_one = 0);
+			void printo(sytet leaf_one = 0, sytet width = 1);
+			void printg(sytet leaf_one = 0, sytet width = 1);
+			void iprinto(intt i = 0, bool nwl = 1);
+			void iprintg(intt i = 0, bool nwl = 1);
 			Flux *arange(intt len);
 			Flux *fill(doublet cv, Flux *fxs = nullptr);
 			Flux *fill(floatt cv, Flux *fxs = nullptr);
@@ -246,8 +282,8 @@ namespace memput {
 			{
 				return equal(nullptr, cmpv, true, false);
 			}
-			Flux *layer_dense(intt nout, intt actf_code, vinitfp vfp = Initializer::xavier, const bytet *name = nullptr);
-			Flux *layer_dense(intt nout, const bytet *actf, vinitfp vfp = Initializer::xavier, const bytet *name = nullptr);
+			Flux *layer_dense(intt nout, intt actf_code, vinitfp vfp = Initializer::xavier, const bytet *name = "layer_dense");
+			Flux *layer_dense(intt nout, const bytet *actf, vinitfp vfp = Initializer::xavier, const bytet *name = "layer_dense");
 			Flux *layer_normal(void);
 			friend Flux *operator+(Flux &a, Flux &b)
 			{
@@ -329,22 +365,24 @@ namespace memput {
 			{
 				return a.div(&a, f);
 			}
-			Flux *coupledot(Flux *wsizing, Flux *wb);
-			Flux *trippledot(Flux *wsizing, Flux *wb);
-			Flux *stridedot(Flux *wsizing, Flux *wb);
+			Flux *scoopup(intt slidey, intt slidex, intt stridey, intt stridex);
+			void scoopup(intt stridey, intt stridex);
+			void minmax_normal(doublet minv, doublet maxv);
+			void minmax(doublet &minv, doublet &maxv, sytet if_sync = 0);
+			void stdnormal(sytet if_sync = 0);
 		};
 
 		const ubytet variable = 0, trainable = 1, apply = 2, constant = 3, const_apply = 4;
 		const ubytet tshort = 2, tfloat = 3, tint = 4, tlong = 5, tdouble = 6;
 
-		Flux *flux(Tracer *tcr, initializer_list<intt> axid, ubytet qtype, ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr);
+		Flux *flux(Tracer *tcr, initializer_list<intt> axid, ubytet qtype, ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr, intt iname = -1);
 		Flux *flux(Tracer *tcr, vector<intt> axid, ubytet qtype, ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr);
 		Flux *flux(Tracer *tcr, Flux *src, ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr);
 		Flux *flux(Flux *src, ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr);
 		Flux *flux(Tracer *tcr, const bytet dstr[], ubytet qtype=tfloat, ubytet fxtype = constant, vinitfp vfp = nullptr, const bytet *name = nullptr);
 		Flux *flux(Tracer *tcr, intt ndim, intt axid[], ubytet qtype, ubytet fxtype, vinitfp vfp = nullptr, const bytet *name = nullptr);
 
-		class Optimizer : public Generic {
+		class Optimizer : public Typer {
 		public:
 			intt bregid;
 			floatt rLning;
@@ -352,14 +390,14 @@ namespace memput {
 			{
 				rLning = lr;
 			}
-			virtual Flux *minimize(Flux *fx) = 0;
+			virtual Flux *minimize(Flux *fx, vector<Flux *> *weight_list = nullptr) = 0;
 		};
 		class AdamOptimizier : public Optimizer {
 		public:
 			AdamOptimizier(floatt lr) : Optimizer(lr)
 			{
 			}
-			Flux *minimize(Flux *fx);
+			Flux *minimize(Flux *fx, vector<Flux *> *weight_list = nullptr);
 		};
 		AdamOptimizier *adam_optimizer(Tracer *tcr, floatt lr = -1);
 
@@ -368,47 +406,122 @@ namespace memput {
 			GradientDescentOptimizier(floatt lr) : Optimizer(lr)
 			{
 			}
-			Flux *minimize(Flux *fx);
+			Flux *minimize(Flux *fx, vector<Flux *> *weight_list = nullptr);
 		};
 		GradientDescentOptimizier *gradient_descent_optimizer(Tracer *tcr, floatt lr = -1);
 
-		class Coaxial : public Generic {//c language neural network
+		class Cell : public Typer {
 		public:
+			intt trainCount;
+			virtual Flux *train(intt *n_train = 0) = 0;
+			virtual Flux *predict(Flux **loss_fx = 0) = 0;
+			virtual Flux *loss2(void) = 0;
+			virtual void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1) = 0;
+			virtual Flux *measureAccuracy(void) = 0;
+		};
+		class Generic : public Cell {
+		public:
+			intt seq_st[64], ist, in_sz, save_ist, save_insz;
+			bool byPolar;
 			void *canet;
-			Flux *zcodec, *dcodec, *clogit, *cypred, *closs, *coptrain, *caccuracy;
+			NameScope *coaxNsp;
+			Flux *zcodec, *dcodec, *clogit, *cypred, *cypred2, *zcodec2, *closs, *closs2, *tloss, *bloss, *coptrain, *caccuracy;
 			Flux *ctargets, *cpredictions, *copmeasure;
-			void cbuild(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
-				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
+			Generic(void) 
+			{ 
+				canet = nullptr;
+				byPolar = 0; 
+			}
+			void makeAnet(Tracer *tcr, intt latent_sz, sytet af);
+			void setmhead(Generic *src);
+			NameScope *cbuild(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+				sytet step, sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
 			intt cbuild(Tracer *tcr, Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
-			void coaxial(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim, sytet af, floatt lr, const bytet *name);
-			Coaxial(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+			NameScope *compress(Tracer *tcr, Flux *ingate, intt latent_sz, intt indiscret, intt embedim, sytet af, floatt lr, const bytet *name = "compress");
+			void setFrontendFactor(Generic *from, Flux *_zcodec);
+			void setFrontendFactor2(Flux *in);
+			NameScope *decompress(Tracer *tcr, intt tar_sz, sytet _endecode = -1, const bytet *name = "decompress");
+			NameScope *_coaxial(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim, sytet step, sytet af, floatt lr, const bytet *name);
+			NameScope *generic(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim, sytet step, sytet af, floatt lr, const bytet *name);
+			Generic(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
-			Coaxial(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+			Generic(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
-			Coaxial(Tracer *tcr, Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
+			Generic(Tracer *tcr, Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
-			Coaxial(Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
+			Generic(Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
-			void accuracy(Flux *predicts, Flux *targets);
+			void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1);
 			Flux *measureAccuracy(void);
 			intt reduction(intt outsz, intt szlat = -1);
 			void decompose(intt outsz);
-			intt decompose2(intt outsz, intt szlat = -1);
-			void connect(Flux *targate, intt outdiscret, floatt lr = -1, sytet opt_t = 0);
-			Flux *train(void);
+			intt decompose2(intt outsz, bool im);
+			Flux *cx_optimizer(Flux *loss, floatt lr, sytet opt_t, vector<Flux *> *weight_list = nullptr);
+			void connect(Flux *targate, intt outdiscret, sytet step = 0, floatt lr = -1, sytet opt_t = 0);
+			Flux *train(intt *n_train = 0);
+			Flux *inference(Flux **loss_fx);
+			Flux *_predict(Flux **loss_fx);
 			Flux *predict(Flux **loss_fx = 0);
+			Flux *loss2(void) { return closs;  }
 		};
-		Coaxial *coaxial(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+		Generic *generic(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 			sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
-		Coaxial *stepwise(Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
+		Generic *stepwise(Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
 			sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
-		Coaxial *coaxial(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+		Generic *generic(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 			sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
-		Coaxial *stepwise(Tracer *tcr, Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
+		Generic *stepwise(Tracer *tcr, Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
 			sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
+		
+		class Algol : public Cell {
+		public:
+			Tracer *agtrc;
+			Generic *agnet, *agnet2;
+			floatt eloss, eloss2;
+			sytet exec1, exec2;
+			Flux *agloss, *agloss2, *agtrain, *agtrain2;
 
-		void BoostMemput(void);
+			NameScope *algol(Tracer *trc, Flux *ingate, Flux *targate, intt latent_sz,
+				intt indiscret, intt outdiscret, intt embedim, bool contraction, sytet af, 
+				floatt lr, const bytet *name);
+			Algol(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+				bool contraction = 1, sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "algol");
+			Algol(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+				bool contraction = 1, sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "algol");
+			Flux *train(intt *n_train = 0);
+			Flux *predict(Flux **loss_fx = 0);
+			Flux *loss2(void);
+			void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1);
+			Flux *measureAccuracy(void);
+		};
+		Algol *algol(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+			bool contraction, sytet af, floatt lr, const bytet *name);
+
+		class Stratus : public Cell {
+		public:
+			Tracer *sortrc, *tartrc;
+			Generic *srsor_net, *srnet3, *srtar_net, *srrtar_net;
+			Flux *snet_ingate, *snet_targate;
+			Flux *srsor_loss, *srtar_loss, *srrtar_loss, *srsor_train, *tarout;
+			intt ichkBound, ichkBound2;
+			bool endChkBound, endChkBound2;
+
+			NameScope *stratus(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim, sytet af, floatt lr, const bytet *name);
+			Stratus(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "stratus");
+			Stratus(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "stratus");
+			Flux *train(intt *n_train = 0);
+			Flux *predict(Flux **loss_fx = 0);
+			Flux *loss2(void);
+			void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1);
+			Flux *measureAccuracy(void);
+		};
+		Stratus *stratus(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
+			sytet af, floatt lr, const bytet *name);
+
+		void BoostMemput(intt gid = 0, sytet boot_if = 0);
 
 #define ERR_MSG_HEAD	"Error Code: %d "
 		class FaultObj {
