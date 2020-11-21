@@ -248,9 +248,9 @@ namespace memput {
 			void *begin_p(intt off = 0);
 			void *begin_wp(intt off = 0);
 			void *end_p(void);
-			void *read_p(vector<intt> axid, intt *rsz = nullptr);
+			void *read_p(vector<intt> axid, intt *rsz = nullptr, intt n = 0);
 			void write_p(vector<intt> axid, void *dat, intt wsz = 0);
-			void howrite(Flux *src, intt iseq = 0);
+			void howrite(Flux *src, intt iseq = 0, intt n = 0);
 			doublet at_d(intt i);
 			doublet at_d2(intt i);
 			void printo(sytet leaf_one = 0, sytet width = 1);
