@@ -50,6 +50,7 @@ namespace memput {
 			virtual void run(Flux *target) = 0;
 			virtual void run(vector<Flux *> target) = 0;
 			virtual void run(vector<Flux *> *target) = 0;
+			virtual void reposet(bytet *rpath) = 0;
 			virtual void npset(intt n) = 0;
 			virtual void lapset(sytet lap) = 0;
 			virtual void gprset(floatt d) = 0;
@@ -201,6 +202,7 @@ namespace memput {
 			void resizing2(intt n);
 			void resizing2(Flux *src);
 			void resizing3(Flux *src);
+			void resizing4(Flux *src);
 			void sizeCheck(intt ndim, intt axid[]);
 			void resizing(Flux *src);
 			Flux *reshape(vector<intt> axid);
@@ -284,7 +286,7 @@ namespace memput {
 			}
 			Flux *layer_dense(intt nout, intt actf_code, vinitfp vfp = Initializer::xavier, const bytet *name = "layer_dense");
 			Flux *layer_dense(intt nout, const bytet *actf, vinitfp vfp = Initializer::xavier, const bytet *name = "layer_dense");
-			Flux *layer_normal(void);
+			Flux *layer_normal(const bytet *name = "layer_narmal");
 			friend Flux *operator+(Flux &a, Flux &b)
 			{
 				return a.plus(&b);
@@ -370,6 +372,9 @@ namespace memput {
 			void minmax_normal(doublet minv, doublet maxv);
 			void minmax(doublet &minv, doublet &maxv, sytet if_sync = 0);
 			void stdnormal(sytet if_sync = 0);
+			void xnormal(bool reverse = 0, bool pavg = 0, sytet if_sync = 0);
+			void xrnormal(Flux *origin, bool pavg = 0, sytet if_sync = 0);
+			void sinpos(intt nseq = 0);// , Flux *fxs = nullptr);
 		};
 
 		const ubytet variable = 0, trainable = 1, apply = 2, constant = 3, const_apply = 4;
@@ -416,8 +421,9 @@ namespace memput {
 			virtual Flux *train(intt *n_train = 0) = 0;
 			virtual Flux *predict(Flux **loss_fx = 0) = 0;
 			virtual Flux *loss2(void) = 0;
-			virtual void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1) = 0;
+			virtual void accuracy(Flux *&predicts, Flux *&targets, intt discrete_out = -1) = 0;
 			virtual Flux *measureAccuracy(void) = 0;
+			virtual void recording(void) = 0;
 		};
 		class Generic : public Cell {
 		public:
@@ -425,7 +431,7 @@ namespace memput {
 			bool byPolar;
 			void *canet;
 			NameScope *coaxNsp;
-			Flux *zcodec, *dcodec, *clogit, *cypred, *cypred2, *zcodec2, *closs, *closs2, *tloss, *bloss, *coptrain, *caccuracy;
+			Flux *zcodec, *dcodec, *clogit, *cypred, *zcodec2, *closs, *bloss, *coptrain, *caccuracy;
 			Flux *ctargets, *cpredictions, *copmeasure;
 			Generic(void) 
 			{ 
@@ -434,6 +440,7 @@ namespace memput {
 			}
 			void makeAnet(Tracer *tcr, intt latent_sz, sytet af);
 			void setmhead(Generic *src);
+			void recording(void) {}
 			NameScope *cbuild(Tracer *tcr, Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 				sytet step, sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet");
 			intt cbuild(Tracer *tcr, Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
@@ -452,7 +459,7 @@ namespace memput {
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
 			Generic(Flux *ingate, intt outsz, intt latent_sz, intt indiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "cnet", bool auto_encoder = 0);
-			void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1);
+			void accuracy(Flux *&predicts, Flux *&targets, intt discrete_out = -1);
 			Flux *measureAccuracy(void);
 			intt reduction(intt outsz, intt szlat = -1);
 			void decompose(intt outsz);
@@ -489,10 +496,11 @@ namespace memput {
 				bool contraction = 1, sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "algol");
 			Algol(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 				bool contraction = 1, sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "algol");
+			void recording(void) {}
 			Flux *train(intt *n_train = 0);
 			Flux *predict(Flux **loss_fx = 0);
 			Flux *loss2(void);
-			void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1);
+			void accuracy(Flux *&predicts, Flux *&targets, intt discrete_out = -1);
 			Flux *measureAccuracy(void);
 		};
 		Algol *algol(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
@@ -512,10 +520,11 @@ namespace memput {
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "stratus");
 			Stratus(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
 				sytet af = ACTF_TANH, floatt lr = -1, const bytet *name = "stratus");
+			void recording(void) {}
 			Flux *train(intt *n_train = 0);
 			Flux *predict(Flux **loss_fx = 0);
 			Flux *loss2(void);
-			void accuracy(Flux *predicts, Flux *targets, sytet discrete_out = -1);
+			void accuracy(Flux *&predicts, Flux *&targets, intt discrete_out = -1);
 			Flux *measureAccuracy(void);
 		};
 		Stratus *stratus(Flux *ingate, Flux *targate, intt latent_sz, intt indiscret, intt outdiscret, intt embedim,
