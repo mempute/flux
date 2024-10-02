@@ -1,5 +1,5 @@
 # flux
-AI framework, c++ &amp;  python 1: 1 matching, powerfull time series neural net, chatbot including
+AI framework, c++ &amp;  python 1: 1 matching, API supporting c++ native and cuda libraries, powerfull time series neural net
 
 쿠다 버전 10.1 빌드.
 
